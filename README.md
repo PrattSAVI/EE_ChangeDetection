@@ -6,3 +6,6 @@ Code has been tested in Western Turkey/Greece and California to detect 2021 summ
 
 
 Code is adopted from UN [burn severity mapping](https://un-spider.org/advisory-support/recommended-practices/recommended-practice-burn-severity/burn-severity-earth-engine)
+
+- Water Areas Removed
+- A larger time frame is used to take median of image collection

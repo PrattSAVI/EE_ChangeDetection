@@ -83,6 +83,7 @@ print("Difference Normalized Burn Ratio: ", dNBR);
 
 //==========================================================================================
 //                                    ADD LAYERS TO MAP
+//==========================================================================================
 
 //---------------------------------- True Color Imagery ------------------------------------
 // Apply platform-specific visualization parameters for true color images
@@ -120,15 +121,50 @@ var sld_intervals =
     '</RasterSymbolizer>';
 
 // Add the image to the map using both the color ramp and interval schemes.
-Map.addLayer(dNBR, { min: -1000, max: 1000, palette: 'white,black' }, 'dNBR greyscale');
-Map.addLayer(dNBR.sldStyle(sld_intervals), {}, 'dNBR classified');
+//Map.addLayer(dNBR, {min: -1000, max: 1000, palette: 'white,black'}, 'dNBR greyscale');
+//Map.addLayer(dNBR.sldStyle(sld_intervals), {}, 'dNBR classified');
 
 // Seperate result into 8 burn severity classes
 var thresholds = ee.Image([-1000, -251, -101, 99, 269, 439, 659, 2000]);
 var classified = dNBR.lt(thresholds).reduce('sum').toInt();
 
+// Remove Low Severty and Unburnt Areas
+var t = dNBR.gt(269)
+var t2 = dNBR.updateMask(t);
+Map.addLayer(t2.sldStyle(sld_intervals), {}, 'dNBR classified')
+
+//==========================================================================================
+//                                    Greenest Pixel -> NDVI Change
+//==========================================================================================
+
+// Add NDVI to Image Collection
+var addNDVI = function(image) {
+    var ndvi = image.normalizedDifference(['B5', 'B4']).rename('NDVI');
+    return image.addBands(ndvi);
+};
+
+var Pre_withNDVI = prefireImCol.map(addNDVI);
+var Post_withNDVI = postfireImCol.map(addNDVI);
+
+//Greenest Pixel image
+var Pre_greenest = Pre_withNDVI.qualityMosaic('NDVI');
+var Post_greenest = Post_withNDVI.qualityMosaic('NDVI');
+
+// Display the result.
+//Map.addLayer(Pre_greenest.select("NDVI").clip(area), {} , 'PRE -> Greenest pixel composite');
+//Map.addLayer(Post_greenest.select("NDVI").clip(area), {} , 'POST -> Greenest pixel composite');
+
+
+var ndvi_Change = Pre_greenest.select("NDVI").clip(area).subtract(Post_greenest.select("NDVI").clip(area));
+ndvi_Change = ndvi_Change.updateMask(water.not());
+
+ndvi_Change = ndvi_Change.updateMask(ndvi_Change.gt(0))
+Map.addLayer(ndvi_Change, { palette: 'white,blue' }, 'NDVI - Change')
+
+
 //==========================================================================================
 //                                    ADD A LEGEND
+//==========================================================================================
 
 // set position of panel
 var legend = ui.Panel({
