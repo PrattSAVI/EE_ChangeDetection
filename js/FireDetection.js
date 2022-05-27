@@ -1,3 +1,5 @@
+// Draw a rectangle and use it as geometry
+
 //===========================================================================================
 //             BURN SEVERITY MAPPING USING THE NORMALIZED BURN RATIO (NBR)
 //===========================================================================================
@@ -93,10 +95,6 @@ if (platform == 'S2' | platform == 's2') {
     var vis = { bands: ['B4', 'B3', 'B2'], min: 0, max: 4000, gamma: 1.5 };
 }
 
-// Add the true color images to the map.
-Map.addLayer(pre_cm_mos, vis, 'Pre-fire True Color Image');
-Map.addLayer(post_cm_mos, vis, 'Post-fire True Color Image');
-
 //-------------------------- Mask Water Areas -----------------------------
 // Resolution is 30m water the JRC water max-extent
 var water = ee.Image("JRC/GSW1_3/GlobalSurfaceWater");
@@ -131,36 +129,64 @@ var classified = dNBR.lt(thresholds).reduce('sum').toInt();
 // Remove Low Severty and Unburnt Areas
 var t = dNBR.gt(269)
 var t2 = dNBR.updateMask(t);
-Map.addLayer(t2.sldStyle(sld_intervals), {}, 'dNBR classified')
+
+
+//=========================================================================================
+//                                    LANDCOVER - CORINE Global Cover - Urban Cover Percentage
+//==========================================================================================
+/* 
+Urban Change and Agriculture Change over time. 
+Calculate Urban Change
+Calculate Agriculture Change
+Show 2000 and mark change
+*/
+//==========================================================================================
+
+// 1990
+var cor_90 = ee.Image('COPERNICUS/CORINE/V20/100m/2000')
+    .select('landcover')
+    .clip(area);
+var cor_90_u = cor_90.updateMask(cor_90.lt(143)); //Urban Footprint
+var cor_90_a = cor_90.updateMask(cor_90.gt(142).and(cor_90.lt(245))); //Agri footprint
+
+// 2018
+var cor_18 = ee.Image('COPERNICUS/CORINE/V20/100m/2018')
+    .select('landcover')
+    .clip(area);
+
+var cor_18_u = cor_18.updateMask(cor_18.lt(143)); // Urban
+var cor_18_a = cor_18.updateMask(cor_18.gt(142).and(cor_18.lt(245))); // Agri
 
 //==========================================================================================
-//                                    Greenest Pixel -> NDVI Change
+//                                    FOREST COVER CHANGE
 //==========================================================================================
 
-// Add NDVI to Image Collection
-var addNDVI = function(image) {
-    var ndvi = image.normalizedDifference(['B5', 'B4']).rename('NDVI');
-    return image.addBands(ndvi);
+var dataset = ee.Image('UMD/hansen/global_forest_change_2021_v1_9').clip(area);
+
+var treeLossVisParam = {
+    bands: ['lossyear'],
+    min: 0,
+    max: 21,
+    palette: ['grey', 'orange']
 };
 
-var Pre_withNDVI = prefireImCol.map(addNDVI);
-var Post_withNDVI = postfireImCol.map(addNDVI);
 
-//Greenest Pixel image
-var Pre_greenest = Pre_withNDVI.qualityMosaic('NDVI');
-var Post_greenest = Post_withNDVI.qualityMosaic('NDVI');
+//==========================================================================================
+//                                    ADD LAYERS to MAP
+//==========================================================================================
 
-// Display the result.
-//Map.addLayer(Pre_greenest.select("NDVI").clip(area), {} , 'PRE -> Greenest pixel composite');
-//Map.addLayer(Post_greenest.select("NDVI").clip(area), {} , 'POST -> Greenest pixel composite');
+// Pre - Post Burn True Color Median Mosaics
+Map.addLayer(pre_cm_mos, vis, 'Pre-fire True Color Image');
+Map.addLayer(post_cm_mos, vis, 'Post-fire True Color Image');
 
+Map.addLayer(dataset, treeLossVisParam, 'tree loss year');
+Map.addLayer(t2.sldStyle(sld_intervals), {}, 'dNBR classified') // Burn Ratio Classified
 
-var ndvi_Change = Pre_greenest.select("NDVI").clip(area).subtract(Post_greenest.select("NDVI").clip(area));
-ndvi_Change = ndvi_Change.updateMask(water.not());
+Map.addLayer(cor_18_u, { palette: 'grey' }, 'Urban Cover_2018');
+Map.addLayer(cor_90_u, { palette: 'black' }, 'Urban Cover_2000');
 
-ndvi_Change = ndvi_Change.updateMask(ndvi_Change.gt(0))
-Map.addLayer(ndvi_Change, { palette: 'white,blue' }, 'NDVI - Change')
-
+Map.addLayer(cor_18_a, { palette: 'orange' }, 'Agri Cover_2018');
+Map.addLayer(cor_90_a, { palette: 'yellow' }, 'Agri Cover_2000');
 
 //==========================================================================================
 //                                    ADD A LEGEND
